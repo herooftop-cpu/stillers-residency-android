@@ -1,0 +1,13 @@
+/* Stiller's Residency v1.1 interaction fixes */
+#notifyBtn{display:block!important}
+.cell-card.selected-cell{box-shadow:0 0 0 3px #1976d2,0 0 0 6px rgba(25,118,210,.18)!important;z-index:2}
+.checkin-action{background:#ffe8a3;color:#7a4a00}
+.continue-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.continue-choice button{border:0;border-radius:12px;padding:14px 12px;font-weight:800;cursor:pointer}
+@media(max-width:800px){
+  html,body{min-height:100%;overscroll-behavior:none}
+  .topbar{padding-top:max(10px,env(safe-area-inset-top))}
+  .sidebar{padding-bottom:max(6px,env(safe-area-inset-bottom))}
+  .continue-choice{grid-template-columns:1fr}
+  .cell-card.selected-cell{box-shadow:0 0 0 3px #1976d2,0 0 0 5px rgba(25,118,210,.16)!important}
+}
