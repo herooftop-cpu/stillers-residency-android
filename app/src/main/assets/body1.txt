@@ -21,7 +21,7 @@
         <button data-page="guests" class="nav-btn">♙ <span>Guest</span></button>
         <button data-page="reports" class="nav-btn">▥ <span>Reports</span></button>
       </nav>
-      <div class="sidebar-bottom"><span id="roleBadge"></span></div>
+      <div class="sidebar-bottom"><span id="roleBadge"></span><div class="developer-credit">Developed by: Najeeb</div></div>
     </aside>
 
     <section class="content">
