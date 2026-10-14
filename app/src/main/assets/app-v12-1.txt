@@ -13,7 +13,7 @@
   localStorage.setItem('residency_device_id', deviceId);
   const deviceName = window.RESIDENCY_ANDROID ? 'Android Mobile' : (/Android/i.test(navigator.userAgent) ? 'Android Mobile' : 'PC / Browser');
 
-  function iso(d){ return d.toISOString().slice(0,10); }
+  function iso(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
   function pad(n){ return String(n).padStart(2,'0'); }
   function dmy(v){ const d = typeof v === 'string' ? new Date(v+'T00:00:00') : v; return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`; }
   function shortDate(d){ return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
