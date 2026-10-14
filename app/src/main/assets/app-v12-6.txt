@@ -1,0 +1,39 @@
+      if(words.some(w=>editDistance(w,needle)<=maxDist)) return 3;
+    }
+    return 999;
+  }
+
+  let guestSearchTimer=null;
+  $('guestSearchBtn').onclick=searchGuests;
+  $('guestSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){clearTimeout(guestSearchTimer);searchGuests();}});
+  $('guestSearch').addEventListener('input',()=>{
+    clearTimeout(guestSearchTimer);
+    const q=$('guestSearch').value.trim();
+    if(!q){ resetGuestSearch(); return; }
+    guestSearchTimer=setTimeout(searchGuests,180);
+  });
+  async function searchGuests(){
+    const q=$('guestSearch').value.trim();
+    if(!q){ resetGuestSearch(); return; }
+    const r=await sb.from('stays').select('guest_name,mobile,room_no,start_date,rent,status').neq('status','cancelled').order('start_date',{ascending:false}).limit(600);
+    if(r.error)return toast(r.error.message);
+    const grouped=new Map();
+    for(const x of (r.data||[])){
+      const key=`${guestNorm(x.guest_name)}|${String(x.mobile||'').trim()}`;
+      if(!grouped.has(key)) grouped.set(key,{guest_name:x.guest_name||'',mobile:x.mobile||'',total_stays:0,total_rent:0,last_room:x.room_no,last_date:x.start_date});
+      const g=grouped.get(key); g.total_stays+=1; g.total_rent+=Number(x.rent||0);
+    }
+    const rows=[...grouped.values()].map(x=>({...x,_score:guestMatchScore(x,q)})).filter(x=>x._score<999).sort((a,b)=>a._score-b._score||String(b.last_date||'').localeCompare(String(a.last_date||''))).slice(0,20);
+    $('guestResults').className='card-list'; show($('guestResults'));
+    $('guestResults').innerHTML=rows.length?rows.map(x=>`<article class="guest-card"><h3>${esc(x.guest_name)}</h3><p>${esc(x.mobile)} • ${x.total_stays} stay(s)</p><p>Last room: ${x.last_room} • Last visit: ${x.last_date?dmy(x.last_date):'-'}</p><p>Total Rent: ${money(x.total_rent)}</p></article>`).join(''):'<div class="empty-state">No matching guest found.</div>';
+  }
+
+  $('reportMonth').value=new Date().toISOString().slice(0,7); $('printReport').onclick=()=>window.print();
+  $('reportMonth').onchange=loadReport;
+  async function loadReport(){ const m=$('reportMonth').value||new Date().toISOString().slice(0,7); const r=await sb.rpc('monthly_report',{p_month:m+'-01'}); if(r.error)return toast(r.error.message); const data=r.data||{}; $('reportSummary').innerHTML=`<div class="summary-card"><span>Total Stays</span><strong>${data.total_stays||0}</strong></div><div class="summary-card"><span>Total Rent (Rs.)</span><strong>${money(data.total_rent||0)}</strong></div>`; const rows=data.rooms||[]; $('roomReport').innerHTML=`<table class="report-table"><thead><tr><th>Room</th><th>Total Stays</th><th>Total Rent (Rs.)</th><th>Last Guest</th></tr></thead><tbody>${rows.map(x=>`<tr class="clickable ${selectedReportRoom===x.room_no?'selected':''}" data-report-room="${x.room_no}"><td>Room ${x.room_no}</td><td>${x.total_stays}</td><td>${money(x.total_rent)}</td><td>${esc(x.last_guest||'-')}</td></tr>`).join('')}<tr class="report-total"><td>Total</td><td>${data.total_stays||0}</td><td>${money(data.total_rent||0)}</td><td>-</td></tr></tbody></table>`; qsa('[data-report-room]').forEach(tr=>tr.onclick=()=>loadRoomDetail(Number(tr.dataset.reportRoom),m)); if(selectedReportRoom)loadRoomDetail(selectedReportRoom,m); }
+  async function loadRoomDetail(room,m){ selectedReportRoom=room; $('detailReportTitle').textContent=`Room ${room} – Date-wise Report`; const r=await sb.rpc('room_month_detail',{p_room_no:room,p_month:m+'-01'}); if(r.error)return toast(r.error.message); const rows=r.data||[]; $('roomDetailReport').innerHTML=rows.length?`<table class="report-table"><thead><tr><th>Date</th><th>Guest Name</th><th>Mobile Number</th><th>Rent (Rs.)</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${dmy(x.start_date)}</td><td>${esc(x.guest_name)}</td><td>${esc(x.mobile)}</td><td>${money(x.rent)}</td></tr>`).join('')}<tr class="report-total"><td colspan="3">Total (Room ${room})</td><td>${money(rows.reduce((a,x)=>a+Number(x.rent||0),0))}</td></tr></tbody></table>`:'<div class="empty-state">No stays for this room in the selected month.</div>'; loadReportHighlight(); }
+  function loadReportHighlight(){ qsa('[data-report-room]').forEach(tr=>tr.classList.toggle('selected',Number(tr.dataset.reportRoom)===selectedReportRoom)); }
+
+  $('menuBtn').onclick=()=>$('adminMenu').classList.toggle('hidden');
+  document.addEventListener('click',e=>{ if(!e.target.closest('#menuBtn')&&!e.target.closest('#adminMenu')) hide($('adminMenu')); });
+  $('logoutBtn').onclick=async()=>{ await sb.rpc('logout_app_account'); await sb.auth.signOut(); location.reload(); };
