@@ -11,6 +11,7 @@
 .view-range{display:flex;align-items:center;gap:7px;margin-right:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 9px}
 .view-range span{font-size:12px;color:var(--muted);font-weight:800}
 .view-range select{border:0;background:transparent;font-weight:800;color:var(--text);outline:0;cursor:pointer}
+.developer-credit{margin-top:6px;font-size:11px;color:#819aa9;letter-spacing:.1px}
 @media(max-width:800px){
   html,body{min-height:100%;overscroll-behavior:none}
   .topbar{padding-top:max(10px,env(safe-area-inset-top))}
