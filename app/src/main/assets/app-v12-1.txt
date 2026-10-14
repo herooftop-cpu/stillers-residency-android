@@ -1,0 +1,61 @@
+(() => {
+  'use strict';
+  const cfg = window.RESIDENCY_CONFIG || {};
+  const $ = id => document.getElementById(id);
+  const qs = s => document.querySelector(s);
+  const qsa = s => [...document.querySelectorAll(s)];
+  const rooms = [101,102,103,104,105,106,107,108];
+  let viewDays = Number(localStorage.getItem('residency_view_days') || 30);
+  if(![7,15,30].includes(viewDays)) viewDays=30;
+  let sb = null, authUser = null, profile = null, weekStart = viewDays===30 ? new Date(new Date().getFullYear(),new Date().getMonth(),1) : startOfWeek(new Date()), stays = [], selectedStay = null, selectedReportRoom = null, selectedCellKey = null;
+  let locked = localStorage.getItem('residency_locked') === '1';
+  const deviceId = localStorage.getItem('residency_device_id') || crypto.randomUUID();
+  localStorage.setItem('residency_device_id', deviceId);
+  const deviceName = window.RESIDENCY_ANDROID ? 'Android Mobile' : (/Android/i.test(navigator.userAgent) ? 'Android Mobile' : 'PC / Browser');
+
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function dmy(v){ const d = typeof v === 'string' ? new Date(v+'T00:00:00') : v; return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`; }
+  function shortDate(d){ return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+  function money(n){ return `Rs. ${Number(n||0).toLocaleString('en-PK',{maximumFractionDigits:0})}`; }
+  function startOfWeek(d){ const x=new Date(d); x.setHours(0,0,0,0); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); return x; }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function todayISO(){ return iso(new Date()); }
+  function rangeEnd(){ return viewDays===30 ? new Date(weekStart.getFullYear(),weekStart.getMonth()+1,0) : addDays(weekStart,viewDays-1); }
+  function rangeCount(){ return Math.round((rangeEnd()-weekStart)/86400000)+1; }
+  function moveRange(dir){ if(viewDays===30){ weekStart=new Date(weekStart.getFullYear(),weekStart.getMonth()+dir,1); } else { weekStart=addDays(weekStart,dir*viewDays); } }
+  function show(el){ el.classList.remove('hidden'); }
+  function hide(el){ el.classList.add('hidden'); }
+  function toast(msg){ const t=$('toast'); t.textContent=msg; show(t); setTimeout(()=>hide(t),2600); }
+  function esc(s=''){ return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function role(){ return profile?.role || 'viewer'; }
+  function canEdit(){ return role()==='admin' && !locked; }
+  function syncRoleUI(){ document.body.classList.toggle('viewer', role()!=='admin'); document.body.classList.toggle('locked', locked); $('roleBadge').textContent = role()==='admin'?'ADMIN':'VIEWER'; $('lockBtn').textContent=locked?'🔒':'🔓'; $('lockBtn').title=locked?'Unlock editing':'Lock editing'; }
+  function setMessage(text,type=''){ const m=$('authMessage'); if(!text){hide(m);return;} m.textContent=text; m.className='message'+(type?` ${type}`:''); show(m); }
+  function openModal(title,html){ $('modalTitle').textContent=title; $('modalBody').innerHTML=html; show($('modal')); }
+  function closeModal(){ hide($('modal')); $('modalBody').innerHTML=''; }
+  $('modalClose').onclick=closeModal;
+  $('modal').addEventListener('click',e=>{ if(e.target===$('modal')) closeModal(); });
+
+  async function boot(){
+    setTimeout(()=>hide($('splash')),900);
+    if(!cfg.supabaseUrl || cfg.supabaseUrl.includes('__SUPABASE') || !cfg.supabasePublishableKey || cfg.supabasePublishableKey.includes('__SUPABASE')){
+      setTimeout(()=>{ show($('authView')); setMessage('Cloud setup is not connected yet. Add the new Stiller\'s Residency Supabase Project URL and Publishable Key.'); },950); return;
+    }
+    sb = window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    try{
+      let {data:{session}}=await sb.auth.getSession();
+      if(!session){ const r=await sb.auth.signInAnonymously(); if(r.error) throw r.error; session=r.data.session; }
+      authUser=session.user;
+      const s=await sb.rpc('my_app_session');
+      if(s.error) throw s.error;
+      if(s.data && s.data.length && s.data[0].active){ profile=s.data[0]; await enterApp(); } else { show($('authView')); }
+    }catch(e){ show($('authView')); setMessage(e.message||'Could not connect to cloud.'); }
+  }
+
+  $('loginBtn').onclick=async()=>{
+    if(!sb) return;
+    setMessage('');
+    const u=$('loginUsername').value.trim(), p=$('loginPassword').value;
+    if(!u||!p) return setMessage('Enter username and password.');
+    const r=await sb.rpc('login_app_account',{p_username:u,p_password:p,p_device_id:deviceId,p_device_name:deviceName});
