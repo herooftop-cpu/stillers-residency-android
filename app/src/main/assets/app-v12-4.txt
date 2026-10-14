@@ -34,15 +34,20 @@
         const current=stays.find(x=>x.id===s.id);
         if(current) openStayDetails(s.id,checkDate);
       };
-      $('continueStay').onclick=()=>openContinueOptions(s);
+      $('continueStay').onclick=()=>openContinueOptions(s,dateIso);
       $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
     }
   }
 
-  function openContinueOptions(s){
-    const next=iso(addDays(new Date(s.end_date+'T00:00:00'),1));
-    openModal('Continue Stay',`<p><strong>${esc(s.guest_name)}</strong> • Next date: <strong>${dmy(next)}</strong></p><p>Will the guest stay in the same room or change room?</p><div class="continue-choice"><button id="continueSame" class="success">Same Room ${s.room_no}</button><button id="continueChange" class="neutral">Change Room</button></div>`);
+  function openContinueOptions(s,dateIso){
+    const baseDate=dateIso || s.end_date;
+    const next=iso(addDays(new Date(baseDate+'T00:00:00'),1));
+    openModal('Continue Stay',`<p><strong>${esc(s.guest_name)}</strong> • Selected date: <strong>${dmy(baseDate)}</strong><br>Next date: <strong>${dmy(next)}</strong></p><p>Will the guest stay in the same room or change room?</p><div class="continue-choice"><button id="continueSame" class="success">Same Room ${s.room_no}</button><button id="continueChange" class="neutral">Change Room</button></div>`);
     $('continueSame').onclick=async()=>{
+      if(s.end_date>=next){
+        closeModal();
+        return toast(`This stay already includes ${dmy(next)}.`);
+      }
       const q=await sb.from('stays').select('id').eq('room_no',Number(s.room_no)).lte('start_date',next).gte('end_date',next).in('status',['reserved','active']).neq('id',s.id).limit(1);
       if(q.error)return toast(q.error.message);
       if(q.data?.length) return toast(`Next date is already booked for Room ${s.room_no}.`);
