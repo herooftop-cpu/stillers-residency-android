@@ -16,6 +16,7 @@
     const isReserved=s.status==='reserved';
     const isActive=s.status==='active';
     const isContinuation=isContinuationCell(s,dateIso);
+    const isSameRecordContinuation=isContinuation && dateIso>s.start_date;
     const canCheckIn=isReserved && !isContinuation;
     const canRevertToBooked=isActive && !isContinuation && dateIso===s.start_date;
     $('selectedDetails').innerHTML=`<div class="details-grid">
@@ -46,7 +47,17 @@
         if(current) openStayDetails(s.id,dateIso);
       });
       $('continueStay').onclick=()=>openContinueOptions(s,dateIso);
-      $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
+      if(isSameRecordContinuation){
+        $('deleteStay').onclick=()=>confirmAction(`Delete continuation for ${dmy(dateIso)}? The original booking will remain.`,async()=>{
+          const previousDate=iso(addDays(new Date(dateIso+'T00:00:00'),-1));
+          const r=await sb.from('stays').update({end_date:previousDate}).eq('id',s.id);
+          if(r.error)return toast(r.error.message);
+          toast(`Continuation for ${dmy(dateIso)} deleted`);
+          hide($('selectedDetails')); selectedCellKey=null; await loadWeek();
+        });
+      }else{
+        $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
+      }
     }
   }
 
