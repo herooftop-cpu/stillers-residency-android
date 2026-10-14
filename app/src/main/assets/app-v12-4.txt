@@ -1,7 +1,7 @@
     </form><div class="modal-actions"><button id="saveStay" class="primary">${existing?'Save Changes':'Save Booking'}</button></div>`);
     $('saveStay').onclick=async()=>{
       const payload={room_no:room,guest_name:$('fGuest').value.trim(),mobile:$('fMobile').value.trim(),rent:Number($('fRent').value||0),advance:Number($('fAdvance').value||0)};
-      if(!payload.guest_name||!payload.mobile) return toast('Guest name and mobile number are required.');
+      if(!payload.guest_name) return toast('Guest name is required.');
       let r;
       if(existing){ r=await sb.from('stays').update(payload).eq('id',existing.id); }
       else { Object.assign(payload,{start_date:date,end_date:date,status:'reserved',created_by_device:deviceId}); r=await sb.from('stays').insert(payload); }
