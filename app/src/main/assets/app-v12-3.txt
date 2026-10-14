@@ -18,16 +18,27 @@ Rent: ${money(record.rent)}`;
   }
 
   async function loadWeek(){
-    const from=iso(weekStart), to=iso(rangeEnd());
+    const from=iso(addDays(weekStart,-1)), to=iso(rangeEnd());
     const r=await sb.from('stays').select('*').lte('start_date',to).gte('end_date',from).neq('status','cancelled').order('room_no').order('start_date');
     if(r.error){toast(r.error.message);return;} stays=r.data||[]; renderCalendar();
   }
 
+  function sameGuestIdentity(a,b){
+    const am=String(a?.mobile||'').replace(/\D/g,''), bm=String(b?.mobile||'').replace(/\D/g,'');
+    if(am && bm && am===bm) return true;
+    const an=guestNorm(a?.guest_name||''), bn=guestNorm(b?.guest_name||'');
+    return !!an && an===bn;
+  }
+  function isContinuationCell(stay,dateIso){
+    if(dateIso>stay.start_date) return true;
+    if(dateIso!==stay.start_date) return false;
+    const prev=iso(addDays(new Date(dateIso+'T00:00:00'),-1));
+    return stays.some(x=>x.id!==stay.id && x.status!=='cancelled' && x.end_date===prev && sameGuestIdentity(x,stay));
+  }
   function statusFor(stay,dateIso){
+    if(isContinuationCell(stay,dateIso)) return ['Continue','continued'];
     if(stay.status==='active' && dateIso===stay.start_date) return ['Check-In','checkin'];
-    if(stay.status==='active' && dateIso>stay.start_date) return ['Continue','continue'];
     if(dateIso===stay.start_date) return ['Booked','booked'];
-    if(dateIso>stay.start_date) return ['Continue','continue'];
     return ['Booked','booked'];
   }
   function activeStayFor(room,dateIso){ return stays.find(s=>Number(s.room_no)===Number(room)&&s.start_date<=dateIso&&s.end_date>=dateIso&&s.status!=='cancelled' && !(s.status==='completed' && s.checkout_date && dateIso>=s.checkout_date)); }
