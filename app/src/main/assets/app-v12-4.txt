@@ -15,13 +15,16 @@
     const [label]=statusFor(s,dateIso);
     const isReserved=s.status==='reserved';
     const isActive=s.status==='active';
+    const isContinuation=isContinuationCell(s,dateIso);
+    const canCheckIn=isReserved && !isContinuation;
+    const canRevertToBooked=isActive && !isContinuation && dateIso===s.start_date;
     $('selectedDetails').innerHTML=`<div class="details-grid">
       <div class="detail-item"><small>Status</small><strong>${label}</strong></div><div class="detail-item"><small>Room</small><strong>${s.room_no}</strong></div><div class="detail-item"><small>Guest Name</small><strong>${esc(s.guest_name)}</strong></div><div class="detail-item"><small>Mobile Number</small><strong>${esc(s.mobile)}</strong></div><div class="detail-item"><small>Rent</small><strong>${money(s.rent)}</strong></div><div class="detail-item"><small>Advance</small><strong>${money(s.advance)}</strong></div><div class="detail-item"><small>Start Date</small><strong>${dmy(s.start_date)}</strong></div><div class="detail-item"><small>Reserved Through</small><strong>${dmy(s.end_date)}</strong></div>
-      </div>${canEdit()?`<div class="detail-actions admin-edit"><button class="neutral" id="editStay">Edit</button><button class="success" id="continueStay">Continue</button><button class="checkin-action" id="checkInStay" ${isActive?'disabled':''}>${isActive?'Checked-In':'Check-In'}</button><button class="danger" id="deleteStay">Delete</button></div>`:''}`;
+      </div>${canEdit()?`<div class="detail-actions admin-edit"><button class="neutral" id="editStay">Edit</button><button class="success" id="continueStay">Continue</button>${canCheckIn?'<button class="checkin-action" id="checkInStay">Check-In</button>':''}${canRevertToBooked?'<button class="revert-booked-action" id="revertBooked">Revert to Booked</button>':''}<button class="danger" id="deleteStay">Delete</button></div>`:''}`;
     show($('selectedDetails'));
     if(canEdit()){
       $('editStay').onclick=()=>openBookingForm(Number(s.room_no),s.start_date,s);
-      if(isReserved && $('checkInStay')) $('checkInStay').onclick=async()=>{
+      if(canCheckIn && $('checkInStay')) $('checkInStay').onclick=async()=>{
         const checkDate=dateIso;
         if(checkDate<s.start_date || checkDate>s.end_date) return toast('Select a booked date for Check-In.');
         const clash=await sb.from('stays').select('id,guest_name').eq('room_no',Number(s.room_no)).lte('start_date',checkDate).gte('end_date',checkDate).in('status',['reserved','active']).neq('id',s.id).limit(1);
@@ -34,6 +37,14 @@
         const current=stays.find(x=>x.id===s.id);
         if(current) openStayDetails(s.id,checkDate);
       };
+      if(canRevertToBooked && $('revertBooked')) $('revertBooked').onclick=()=>confirmAction(`Revert Room ${s.room_no} from Check-In back to Booked?`,async()=>{
+        const r=await sb.from('stays').update({status:'reserved'}).eq('id',s.id);
+        if(r.error)return toast(r.error.message);
+        toast(`Room ${s.room_no} reverted to Booked`);
+        await loadWeek();
+        const current=stays.find(x=>x.id===s.id);
+        if(current) openStayDetails(s.id,dateIso);
+      });
       $('continueStay').onclick=()=>openContinueOptions(s,dateIso);
       $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
     }
