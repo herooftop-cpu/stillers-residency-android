@@ -49,7 +49,7 @@
           <button id="weekPicker" class="week-label"></button>
           <button id="nextWeek">›</button>
         </div>
-        <div class="legend"><span class="lg available"></span>Available <span class="lg booked"></span>Booked / Continue <span class="lg checkin"></span>Checked-In</div>
+        <div class="legend"><span class="lg available"></span>Available / Continue <span class="lg booked"></span>Booked <span class="lg checkin"></span>Checked-In</div>
         <div id="calendarWrap" class="calendar-wrap"></div>
         <section id="selectedDetails" class="details-panel hidden"></section>
       </section>
