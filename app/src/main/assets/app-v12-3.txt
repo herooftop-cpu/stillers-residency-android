@@ -1,0 +1,74 @@
+    const body=`Room ${record.room_no} — ${record.guest_name}
+Rent: ${money(record.rent)}`;
+    if(window.RESIDENCY_ANDROID && window.AndroidNative?.showNotification){
+      try{ window.AndroidNative.showNotification(title,body); }catch(_){}
+      return;
+    }
+    if('Notification' in window && Notification.permission==='granted'){
+      try{ new Notification(title,{body}); }catch(_){}
+    }
+  }
+  function subscribeRealtime(){
+    if(channel) sb.removeChannel(channel);
+    channel=sb.channel('stays-live').on('postgres_changes',{event:'*',schema:'public',table:'stays'},async payload=>{
+      if(payload?.eventType==='INSERT') notifyNewBooking(payload.new);
+      await loadWeek();
+      if(!qs('#reportsPage.hidden')) loadReport();
+    }).subscribe();
+  }
+
+  async function loadWeek(){
+    const from=iso(weekStart), to=iso(rangeEnd());
+    const r=await sb.from('stays').select('*').lte('start_date',to).gte('end_date',from).neq('status','cancelled').order('room_no').order('start_date');
+    if(r.error){toast(r.error.message);return;} stays=r.data||[]; renderCalendar();
+  }
+
+  function statusFor(stay,dateIso){
+    if(stay.status==='active') return ['Check-In','checkin'];
+    if(dateIso===stay.start_date) return ['Booked','booked'];
+    if(dateIso>stay.start_date) return ['Continue','continue'];
+    return ['Booked','booked'];
+  }
+  function activeStayFor(room,dateIso){ return stays.find(s=>Number(s.room_no)===Number(room)&&s.start_date<=dateIso&&s.end_date>=dateIso&&s.status!=='cancelled' && !(s.status==='completed' && s.checkout_date && dateIso>=s.checkout_date)); }
+
+  function renderCalendar(){
+    $('weekPicker').textContent=`${shortDate(weekStart)} – ${shortDate(rangeEnd())}`;
+    if($('viewDays')) $('viewDays').value=String(viewDays);
+    let h='<table class="calendar"><thead><tr><th>Date</th>'+rooms.map(r=>`<th>Room ${r}</th>`).join('')+'</tr></thead><tbody>';
+    for(let i=0;i<rangeCount();i++){
+      const d=addDays(weekStart,i), di=iso(d);
+      h+=`<tr><td class="date-cell">${d.toLocaleDateString('en-US',{weekday:'short'})}<small>${shortDate(d)}</small></td>`;
+      for(const room of rooms){
+        const s=activeStayFor(room,di);
+        const key=`${room}|${di}`;
+        const selected=selectedCellKey===key?' selected-cell':'';
+        if(!s){
+          h+=`<td class="room-cell"><div class="cell-card available${selected}" data-room="${room}" data-date="${di}" data-empty="1"><div class="cell-status">Available</div>${canEdit()?'<div class="plus">+</div>':''}</div></td>`;
+        }else{
+          const [label,cls]=statusFor(s,di);
+          h+=`<td class="room-cell"><div class="cell-card ${cls}${selected}" data-room="${room}" data-stay="${s.id}" data-date="${di}"><div class="cell-status">${label}</div><div class="cell-guest">${esc(s.guest_name)}</div><div class="cell-mobile">${esc(s.mobile||'')}</div><div class="cell-money">Rent: ${money(s.rent)}<br>Adv: ${money(s.advance)}</div></div></td>`;
+        }
+      }
+      h+='</tr>';
+    }
+    h+='</tbody></table>';
+    $('calendarWrap').innerHTML=h;
+    qsa('.cell-card').forEach(el=>{
+      const selectCell=()=>{
+        selectedCellKey=`${el.dataset.room}|${el.dataset.date}`;
+        qsa('.cell-card.selected-cell').forEach(x=>x.classList.remove('selected-cell'));
+        el.classList.add('selected-cell');
+      };
+      el.onclick=()=>{ selectCell(); if(el.dataset.empty==='1'){ if(canEdit()) openBookingForm(Number(el.dataset.room),el.dataset.date); } else openStayDetails(el.dataset.stay,el.dataset.date); };
+      el.oncontextmenu=e=>{ e.preventDefault(); selectCell(); if(el.dataset.empty==='1'&&canEdit()) openBookingForm(Number(el.dataset.room),el.dataset.date); };
+    });
+  }
+
+  function openBookingForm(room,date,existing=null){
+    if(!canEdit()) return;
+    const nonce=Date.now();
+    openModal(existing?'Edit Booking':`Occupy Room ${room} • ${dmy(date)}`,`<form id="bookingForm" class="form-grid" autocomplete="off" onsubmit="return false">
+      <label>Guest Name<input id="fGuest" name="booking_guest_${nonce}" autocomplete="new-password" data-lpignore="true" data-form-type="other" autocorrect="off" autocapitalize="words" spellcheck="false" value="${esc(existing?.guest_name||'')}"></label>
+      <label>Mobile Number<input id="fMobile" name="booking_mobile_${nonce}" inputmode="tel" autocomplete="new-password" data-lpignore="true" data-form-type="other" autocorrect="off" spellcheck="false" value="${esc(existing?.mobile||'')}"></label>
+      <label>Rent (Rs.)<input id="fRent" name="booking_rent_${nonce}" type="number" min="0" autocomplete="off" value="${existing?.rent??''}"></label>
+      <label>Advance (Rs.)<input id="fAdvance" name="booking_advance_${nonce}" type="number" min="0" autocomplete="off" value="${existing?.advance??''}"></label>
