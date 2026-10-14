@@ -22,18 +22,17 @@
     if(canEdit()){
       $('editStay').onclick=()=>openBookingForm(Number(s.room_no),s.start_date,s);
       if(isReserved && $('checkInStay')) $('checkInStay').onclick=async()=>{
-        const today=todayISO();
-        if(today<s.start_date) return toast(`Booking starts on ${dmy(s.start_date)}. Check-In is not available yet.`);
-        const clash=await sb.from('stays').select('id,guest_name').eq('room_no',Number(s.room_no)).lte('start_date',today).gte('end_date',today).in('status',['reserved','active']).neq('id',s.id).limit(1);
+        const checkDate=dateIso;
+        if(checkDate<s.start_date || checkDate>s.end_date) return toast('Select a booked date for Check-In.');
+        const clash=await sb.from('stays').select('id,guest_name').eq('room_no',Number(s.room_no)).lte('start_date',checkDate).gte('end_date',checkDate).in('status',['reserved','active']).neq('id',s.id).limit(1);
         if(clash.error)return toast(clash.error.message);
-        if(clash.data?.length)return toast(`Room ${s.room_no} is already booked today.`);
-        const newEnd=s.end_date<today?today:s.end_date;
-        const r=await sb.from('stays').update({status:'active',end_date:newEnd}).eq('id',s.id);
-        if(r.error)return toast(r.error.message.includes('no_room_overlap')?`Room ${s.room_no} is already booked today.`:r.error.message);
-        toast(`Room ${s.room_no} checked in`);
+        if(clash.data?.length)return toast(`Room ${s.room_no} is already booked on ${dmy(checkDate)}.`);
+        const r=await sb.from('stays').update({status:'active',start_date:checkDate,end_date:checkDate}).eq('id',s.id);
+        if(r.error)return toast(r.error.message.includes('no_room_overlap')?`Room ${s.room_no} is already booked on ${dmy(checkDate)}.`:r.error.message);
+        toast(`Room ${s.room_no} checked in for ${dmy(checkDate)}`);
         await loadWeek();
         const current=stays.find(x=>x.id===s.id);
-        if(current) openStayDetails(s.id,today);
+        if(current) openStayDetails(s.id,checkDate);
       };
       $('continueStay').onclick=()=>openContinueOptions(s);
       $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
