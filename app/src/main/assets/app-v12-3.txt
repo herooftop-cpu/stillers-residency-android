@@ -24,7 +24,8 @@ Rent: ${money(record.rent)}`;
   }
 
   function statusFor(stay,dateIso){
-    if(stay.status==='active') return ['Check-In','checkin'];
+    if(stay.status==='active' && dateIso===stay.start_date) return ['Check-In','checkin'];
+    if(stay.status==='active' && dateIso>stay.start_date) return ['Continue','continue'];
     if(dateIso===stay.start_date) return ['Booked','booked'];
     if(dateIso>stay.start_date) return ['Continue','continue'];
     return ['Booked','booked'];
