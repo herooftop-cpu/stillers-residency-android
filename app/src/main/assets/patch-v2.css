@@ -1,15 +1,19 @@
-/* Stiller's Residency v1.1 interaction fixes */
+/* Stiller's Residency v1.2 booking/calendar fixes */
 #notifyBtn{display:block!important}
 .cell-card.selected-cell{box-shadow:0 0 0 3px #1976d2,0 0 0 6px rgba(25,118,210,.18)!important;z-index:2}
-.checkin-action{background:#ffe08a!important;color:#7a4a00!important;border:0!important;border-radius:10px!important;padding:10px 13px!important;font-weight:800!important;cursor:pointer!important}
-.cell-card.checked-in-active{background:#ffe8a3!important;color:#5f3d00!important}
-.cell-card.checked-in-active .cell-status,.cell-card.checked-in-active .cell-guest,.cell-card.checked-in-active .cell-mobile,.cell-card.checked-in-active .cell-money{color:#5f3d00!important}
+.checkin-action{background:#ffe08a!important;color:#6f4600!important;border:0!important;border-radius:10px!important;padding:10px 13px!important;font-weight:900!important;cursor:pointer!important}
+.checkin-action:disabled{opacity:1!important;cursor:default!important;background:#ffe08a!important;color:#6f4600!important}
 .continue-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .continue-choice button{border:0;border-radius:12px;padding:14px 12px;font-weight:800;cursor:pointer}
+.view-range{display:flex;align-items:center;gap:7px;margin-right:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 9px}
+.view-range span{font-size:12px;color:var(--muted);font-weight:800}
+.view-range select{border:0;background:transparent;font-weight:800;color:var(--text);outline:0;cursor:pointer}
 @media(max-width:800px){
   html,body{min-height:100%;overscroll-behavior:none}
   .topbar{padding-top:max(10px,env(safe-area-inset-top))}
   .sidebar{padding-bottom:max(6px,env(safe-area-inset-bottom))}
   .continue-choice{grid-template-columns:1fr}
   .cell-card.selected-cell{box-shadow:0 0 0 3px #1976d2,0 0 0 5px rgba(25,118,210,.16)!important}
+  .week-toolbar{flex-wrap:wrap}
+  .view-range{width:100%;margin:0 0 2px 0;justify-content:center}
 }
