@@ -1,0 +1,83 @@
+      const r=await sb.from('stays').update({end_date:next,status:s.status==='reserved'?'reserved':'active'}).eq('id',s.id);
+      if(r.error)return toast(r.error.message.includes('no_room_overlap')?`Next date is already booked for Room ${s.room_no}.`:r.error.message);
+      closeModal(); toast(`Stay continued in Room ${s.room_no}`); await loadWeek();
+    };
+    $('continueChange').onclick=()=>openRoomChangeOptions(s,next);
+  }
+
+  async function openRoomChangeOptions(s,next){
+    const q=await sb.from('stays').select('room_no').lte('start_date',next).gte('end_date',next).in('status',['reserved','active']);
+    if(q.error)return toast(q.error.message);
+    const occupied=new Set((q.data||[]).map(x=>Number(x.room_no)));
+    const available=rooms.filter(r=>r!==Number(s.room_no)&&!occupied.has(r));
+    if(!available.length) return toast('No other room is available on the next date.');
+    openModal('Change Room',`<p>Next date: <strong>${dmy(next)}</strong></p><div class="form-grid"><label>Select Available Room<select id="moveRoom">${available.map(r=>`<option value="${r}">Room ${r}</option>`).join('')}</select></label></div><div class="modal-actions"><button id="saveRoomChange" class="primary">Continue in Selected Room</button></div>`);
+    $('saveRoomChange').onclick=async()=>{
+      const room=Number($('moveRoom').value);
+      const recheck=await sb.from('stays').select('id').eq('room_no',room).lte('start_date',next).gte('end_date',next).in('status',['reserved','active']).limit(1);
+      if(recheck.error)return toast(recheck.error.message);
+      if(recheck.data?.length) return toast(`Room ${room} is already booked on ${dmy(next)}.`);
+      const payload={room_no:room,guest_name:s.guest_name,mobile:s.mobile,rent:Number(s.rent||0),advance:0,start_date:next,end_date:next,status:s.status==='active'?'active':'reserved',created_by_device:deviceId};
+      const r=await sb.from('stays').insert(payload);
+      if(r.error)return toast(r.error.message.includes('no_room_overlap')?`Room ${room} is already booked on ${dmy(next)}.`:r.error.message);
+      closeModal(); toast(`Guest continued in Room ${room}`); await loadWeek();
+    };
+  }
+
+  function confirmAction(text,fn){ openModal('Confirm',`<p>${esc(text)}</p><div class="modal-actions"><button id="cancelConfirm" class="neutral">Cancel</button><button id="yesConfirm" class="danger">Confirm</button></div>`); $('cancelConfirm').onclick=closeModal; $('yesConfirm').onclick=async()=>{closeModal(); await fn();}; }
+
+  $('prevWeek').onclick=async()=>{moveRange(-1);selectedCellKey=null;await loadWeek();};
+  $('nextWeek').onclick=async()=>{moveRange(1);selectedCellKey=null;await loadWeek();};
+  if($('viewDays')) $('viewDays').onchange=async e=>{
+    viewDays=Number(e.target.value)||30;
+    if(![7,15,30].includes(viewDays)) viewDays=30;
+    localStorage.setItem('residency_view_days',String(viewDays));
+    const now=new Date();
+    weekStart=viewDays===30 ? new Date(now.getFullYear(),now.getMonth(),1) : startOfWeek(now);
+    selectedCellKey=null;
+    hide($('selectedDetails'));
+    await loadWeek();
+  };
+
+  qsa('.nav-btn').forEach(b=>b.onclick=()=>switchPage(b.dataset.page));
+  function resetGuestSearch(){
+    if(!$('guestSearch')||!$('guestResults')) return;
+    $('guestSearch').value='';
+    $('guestResults').innerHTML='';
+    $('guestResults').className='card-list hidden';
+  }
+  function switchPage(page){
+    qsa('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+    qsa('.page').forEach(x=>hide(x));
+    show($(page+'Page'));
+    if(page==='reports') loadReport();
+    if(page==='guests') $('guestSearch').focus();
+    else resetGuestSearch();
+  }
+  function renderCurrentPage(){ switchPage('calendar'); }
+
+  function guestNorm(v=''){ return String(v).toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+  function editDistance(a,b){
+    a=guestNorm(a); b=guestNorm(b);
+    const prev=Array.from({length:b.length+1},(_,i)=>i);
+    for(let i=1;i<=a.length;i++){
+      let left=i, diag=i-1;
+      for(let j=1;j<=b.length;j++){
+        const up=prev[j];
+        const cur=a[i-1]===b[j-1]?diag:1+Math.min(diag,up,left);
+        prev[j]=cur; diag=up; left=cur;
+      }
+    }
+    return prev[b.length];
+  }
+  function guestMatchScore(row,q){
+    const raw=guestNorm(q); if(!raw) return 999;
+    const name=guestNorm(row.guest_name), mobile=String(row.mobile||'').replace(/\D/g,''), digits=String(q).replace(/\D/g,'');
+    if(digits.length>=3 && mobile.includes(digits)) return 0;
+    if(name.startsWith(raw)) return 0;
+    const needle=raw.split(' ')[0];
+    const words=name.split(' ').filter(Boolean);
+    if(words.some(w=>w.startsWith(needle))) return 1;
+    if(name.includes(raw)) return 2;
+    if(needle.length>=3){
+      const maxDist=needle.length>=7?2:1;
