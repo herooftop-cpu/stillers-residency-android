@@ -1,0 +1,49 @@
+    </form><div class="modal-actions"><button id="saveStay" class="primary">${existing?'Save Changes':'Save Booking'}</button></div>`);
+    $('saveStay').onclick=async()=>{
+      const payload={room_no:room,guest_name:$('fGuest').value.trim(),mobile:$('fMobile').value.trim(),rent:Number($('fRent').value||0),advance:Number($('fAdvance').value||0)};
+      if(!payload.guest_name||!payload.mobile) return toast('Guest name and mobile number are required.');
+      let r;
+      if(existing){ r=await sb.from('stays').update(payload).eq('id',existing.id); }
+      else { Object.assign(payload,{start_date:date,end_date:date,status:'reserved',created_by_device:deviceId}); r=await sb.from('stays').insert(payload); }
+      if(r.error) return toast(r.error.message.includes('no_room_overlap')?'This room is already occupied/booked for that date.':r.error.message);
+      closeModal(); toast(existing?'Booking updated':'Booking saved'); await loadWeek();
+    };
+  }
+
+  function openStayDetails(id,dateIso){
+    const s=stays.find(x=>x.id===id); if(!s)return; selectedStay=s;
+    const [label]=statusFor(s,dateIso);
+    const isReserved=s.status==='reserved';
+    const isActive=s.status==='active';
+    $('selectedDetails').innerHTML=`<div class="details-grid">
+      <div class="detail-item"><small>Status</small><strong>${label}</strong></div><div class="detail-item"><small>Room</small><strong>${s.room_no}</strong></div><div class="detail-item"><small>Guest Name</small><strong>${esc(s.guest_name)}</strong></div><div class="detail-item"><small>Mobile Number</small><strong>${esc(s.mobile)}</strong></div><div class="detail-item"><small>Rent</small><strong>${money(s.rent)}</strong></div><div class="detail-item"><small>Advance</small><strong>${money(s.advance)}</strong></div><div class="detail-item"><small>Start Date</small><strong>${dmy(s.start_date)}</strong></div><div class="detail-item"><small>Reserved Through</small><strong>${dmy(s.end_date)}</strong></div>
+      </div>${canEdit()?`<div class="detail-actions admin-edit"><button class="neutral" id="editStay">Edit</button><button class="success" id="continueStay">Continue</button><button class="checkin-action" id="checkInStay" ${isActive?'disabled':''}>${isActive?'Checked-In':'Check-In'}</button><button class="danger" id="deleteStay">Delete</button></div>`:''}`;
+    show($('selectedDetails'));
+    if(canEdit()){
+      $('editStay').onclick=()=>openBookingForm(Number(s.room_no),s.start_date,s);
+      if(isReserved && $('checkInStay')) $('checkInStay').onclick=async()=>{
+        const today=todayISO();
+        if(today<s.start_date) return toast(`Booking starts on ${dmy(s.start_date)}. Check-In is not available yet.`);
+        const clash=await sb.from('stays').select('id,guest_name').eq('room_no',Number(s.room_no)).lte('start_date',today).gte('end_date',today).in('status',['reserved','active']).neq('id',s.id).limit(1);
+        if(clash.error)return toast(clash.error.message);
+        if(clash.data?.length)return toast(`Room ${s.room_no} is already booked today.`);
+        const newEnd=s.end_date<today?today:s.end_date;
+        const r=await sb.from('stays').update({status:'active',end_date:newEnd}).eq('id',s.id);
+        if(r.error)return toast(r.error.message.includes('no_room_overlap')?`Room ${s.room_no} is already booked today.`:r.error.message);
+        toast(`Room ${s.room_no} checked in`);
+        await loadWeek();
+        const current=stays.find(x=>x.id===s.id);
+        if(current) openStayDetails(s.id,today);
+      };
+      $('continueStay').onclick=()=>openContinueOptions(s);
+      $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); selectedCellKey=null; await loadWeek(); });
+    }
+  }
+
+  function openContinueOptions(s){
+    const next=iso(addDays(new Date(s.end_date+'T00:00:00'),1));
+    openModal('Continue Stay',`<p><strong>${esc(s.guest_name)}</strong> • Next date: <strong>${dmy(next)}</strong></p><p>Will the guest stay in the same room or change room?</p><div class="continue-choice"><button id="continueSame" class="success">Same Room ${s.room_no}</button><button id="continueChange" class="neutral">Change Room</button></div>`);
+    $('continueSame').onclick=async()=>{
+      const q=await sb.from('stays').select('id').eq('room_no',Number(s.room_no)).lte('start_date',next).gte('end_date',next).in('status',['reserved','active']).neq('id',s.id).limit(1);
+      if(q.error)return toast(q.error.message);
+      if(q.data?.length) return toast(`Next date is already booked for Room ${s.room_no}.`);
