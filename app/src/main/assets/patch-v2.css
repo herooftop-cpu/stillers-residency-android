@@ -3,8 +3,8 @@
 .cell-card.selected-cell{box-shadow:0 0 0 3px #1976d2,0 0 0 6px rgba(25,118,210,.18)!important;z-index:2}
 .checkin-action{background:#ffe08a!important;color:#6f4600!important;border:0!important;border-radius:10px!important;padding:10px 13px!important;font-weight:900!important;cursor:pointer!important}
 .checkin-action:disabled{opacity:1!important;cursor:default!important;background:#ffe08a!important;color:#6f4600!important}
-.cell-card.continued{background:var(--green)!important;color:var(--greenText)!important}
-.cell-card.continued .cell-status,.cell-card.continued .cell-guest,.cell-card.continued .cell-mobile,.cell-card.continued .cell-money{color:var(--greenText)!important}
+.cell-card.continued{background:#dbeafe!important;color:#0b4f8a!important}
+.cell-card.continued .cell-status,.cell-card.continued .cell-guest,.cell-card.continued .cell-mobile,.cell-card.continued .cell-money{color:#0b4f8a!important}
 .revert-booked-action{background:#e9eef5!important;color:#23405c!important;border:0!important;border-radius:10px!important;padding:10px 13px!important;font-weight:800!important;cursor:pointer!important}
 .continue-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .continue-choice button{border:0;border-radius:12px;padding:14px 12px;font-weight:800;cursor:pointer}
