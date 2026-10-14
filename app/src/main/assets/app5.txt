@@ -1,0 +1,25 @@
+ast(r.error.message); const users=r.data||[]; openModal('User & Role Management',`<div id="usersList">${users.map(u=>`<div class="guest-card"><h3>${esc(u.username)} <small>• ${u.role}</small></h3><p>${u.active_now?'🟢 Active':'⚪ Offline'}${u.last_seen_at?` • Last seen ${new Date(u.last_seen_at).toLocaleString()}`:''}</p>${u.is_owner?'<p>Owner Admin</p>':`<div class="modal-actions"><button class="neutral" data-role-id="${u.id}" data-new-role="${u.role==='admin'?'viewer':'admin'}">Make ${u.role==='admin'?'Viewer':'Admin'}</button><button class="danger" data-block-id="${u.id}" data-block="${!u.is_blocked}">${u.is_blocked?'Unblock':'Block'}</button></div>`}</div>`).join('')}</div><hr><h4>Create User</h4><div class="form-grid"><label>Username<input id="newUser"></label><label>Password<input id="newPass" type="password"></label><label>Role<select id="newRole"><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label></div><div class="modal-actions"><button id="createUser" class="primary">Create User</button></div>`);
+    qsa('[data-role-id]').forEach(b=>b.onclick=async()=>{ const x=await sb.rpc('admin_change_role',{p_account_id:b.dataset.roleId,p_new_role:b.dataset.newRole}); if(x.error)return toast(x.error.message); toast('Role changed; user must sign in again.'); closeModal(); });
+    qsa('[data-block-id]').forEach(b=>b.onclick=async()=>{ const x=await sb.rpc('admin_set_blocked',{p_account_id:b.dataset.blockId,p_blocked:b.dataset.block==='true'}); if(x.error)return toast(x.error.message); toast('User status updated'); closeModal(); });
+    $('createUser').onclick=async()=>{ const x=await sb.rpc('admin_create_user',{p_username:$('newUser').value.trim(),p_password:$('newPass').value,p_role:$('newRole').value}); if(x.error)return toast(x.error.message); toast('User created'); closeModal(); };
+  };
+
+  $('accountBtn').onclick=()=>{ if(role()!=='admin')return; openModal('Admin Account',`<div class="form-grid"><label>Current Password<input id="curPass" type="password"></label><label>New Username (optional)<input id="newUsername" placeholder="Leave blank to keep current"></label><label>New Password (optional)<input id="newAdminPass" type="password" placeholder="Leave blank to keep current"></label></div><div class="modal-actions"><button id="saveAdminAccount" class="primary">Save Changes</button></div>`); $('saveAdminAccount').onclick=async()=>{ const r=await sb.rpc('admin_change_my_login',{p_current_password:$('curPass').value,p_new_username:$('newUsername').value.trim()||null,p_new_password:$('newAdminPass').value||null}); if(r.error)return toast(r.error.message); toast('Admin login changed. Please sign in again.'); setTimeout(()=>location.reload(),1000); }; };
+  $('lockPasswordBtn').onclick=()=>{ if(role()!=='admin')return; openModal('Change Lock Password',`<div class="form-grid"><label>Current Lock Password<input id="oldLock" type="password"></label><label>New Lock Password<input id="newLock" type="password"></label></div><div class="modal-actions"><button id="saveLockPassword" class="primary">Change Password</button></div>`); $('saveLockPassword').onclick=async()=>{ const r=await sb.rpc('admin_change_lock_password',{p_current_password:$('oldLock').value,p_new_password:$('newLock').value}); if(r.error)return toast(r.error.message); toast('Lock password changed');closeModal(); }; };
+
+  $('notifyBtn').onclick=registerPush;
+  async function registerServiceWorker(){ if('serviceWorker' in navigator){ try{ await navigator.serviceWorker.register('./sw.js',{scope:'./'}); }catch(_){ } } }
+  function urlBase64ToUint8Array(base64String){ const padding='='.repeat((4-base64String.length%4)%4); const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/'); const raw=atob(base64); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
+  async function registerPush(){
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)) return toast('Push notifications are not supported on this device/browser.');
+    try{
+      const permission=await Notification.requestPermission(); if(permission!=='granted')return toast('Notification permission was not granted.');
+      const reg=await navigator.serviceWorker.ready; let sub=await reg.pushManager.getSubscription();
+      if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(cfg.vapidPublicKey)});
+      const r=await sb.from('push_subscriptions').upsert({auth_uid:authUser.id,device_id:deviceId,subscription:sub.toJSON(),device_name:deviceName},{onConflict:'auth_uid,device_id'});
+      if(r.error)throw r.error; toast('Notifications enabled');
+    }catch(e){toast(e.message||'Could not enable notifications.');}
+  }
+
+  boot();
+})();

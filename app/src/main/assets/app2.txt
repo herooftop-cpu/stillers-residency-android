@@ -1,0 +1,66 @@
+Lock').value,p_device_id:deviceId,p_device_name:deviceName});
+      if(r.error) return toast(r.error.message);
+      const data=r.data;
+      openModal('Save Your Recovery Code',`<p>This code is shown for recovery. Save it safely.</p><div style="font-size:28px;font-weight:900;text-align:center;padding:20px;background:#f5f7f9;border-radius:12px">${esc(data.recovery_code)}</div><div class="modal-actions"><button id="finishSetup" class="primary">I Saved It</button></div>`);
+    }
+    if(e.target?.id==='finishSetup'){ closeModal(); const s=await sb.rpc('my_app_session'); profile=s.data?.[0]; await enterApp(); }
+  });
+
+  $('recoverBtn').onclick=()=>openModal('Recover Admin Login',`<div class="form-grid">
+    <label>Recovery Code<input id="recoveryCode" placeholder="SR-XXXX-XXXX"></label>
+    <label>New Admin Username<input id="recoveryUser"></label>
+    <label>New Admin Password<input id="recoveryPass" type="password"></label>
+    </div><div class="modal-actions"><button id="doRecovery" class="primary">Reset Admin Login</button></div>`);
+  document.addEventListener('click',async e=>{
+    if(e.target?.id==='doRecovery'){
+      const r=await sb.rpc('recover_owner_admin',{p_recovery_code:$('recoveryCode').value.trim(),p_new_username:$('recoveryUser').value.trim(),p_new_password:$('recoveryPass').value});
+      if(r.error) return toast(r.error.message); closeModal(); setMessage('Admin login reset. Sign in with the new username and password.','success');
+    }
+  });
+
+  async function enterApp(){
+    hide($('authView')); show($('appView')); $('userLine').textContent=`${profile.role==='admin'?'Admin':'Viewer'} • ${profile.username}`; syncRoleUI();
+    await heartbeat(); await loadWeek(); subscribeRealtime(); renderCurrentPage();
+    setInterval(heartbeat,45000); setInterval(refreshSession,60000);
+    await registerServiceWorker();
+    setTimeout(offerNotificationSetup,700);
+  }
+  function offerNotificationSetup(){
+    if(!('Notification' in window) || Notification.permission!=='default' || localStorage.getItem('residency_notify_prompted')==='1') return;
+    openModal('Enable Booking Notifications',`<p>Receive a notification when another device creates a new room booking. The device that creates the booking will not receive its own notification.</p><div class="modal-actions"><button id="notifyLater" class="neutral">Later</button><button id="notifyNow" class="primary">Enable Notifications</button></div>`);
+    $('notifyLater').onclick=()=>{ localStorage.setItem('residency_notify_prompted','1'); closeModal(); };
+    $('notifyNow').onclick=async()=>{ localStorage.setItem('residency_notify_prompted','1'); closeModal(); await registerPush(); };
+  }
+  async function heartbeat(){ if(!sb) return; await sb.rpc('heartbeat',{p_device_id:deviceId,p_device_name:deviceName}); }
+  async function refreshSession(){ if(!sb)return; const s=await sb.rpc('my_app_session'); if(s.error||!s.data?.length||!s.data[0].active){ location.reload(); return; } const old=profile.role; profile=s.data[0]; if(old!==profile.role){toast(`Role changed to ${profile.role}`); syncRoleUI(); renderCalendar();} }
+
+  let channel=null;
+  function subscribeRealtime(){
+    if(channel) sb.removeChannel(channel);
+    channel=sb.channel('stays-live').on('postgres_changes',{event:'*',schema:'public',table:'stays'},async()=>{ await loadWeek(); if(!qs('#reportsPage.hidden')) loadReport(); }).subscribe();
+  }
+
+  async function loadWeek(){
+    const from=iso(weekStart), to=iso(addDays(weekStart,6));
+    const r=await sb.from('stays').select('*').lte('start_date',to).gte('end_date',from).neq('status','cancelled').order('room_no').order('start_date');
+    if(r.error){toast(r.error.message);return;} stays=r.data||[]; renderCalendar();
+  }
+
+  function statusFor(stay,dateIso){
+    if(dateIso===todayISO() && stay.start_date===dateIso) return ['Check-In','checkin'];
+    if(dateIso===stay.start_date && dateIso>todayISO()) return ['Booked','booked'];
+    if(dateIso>stay.start_date) return ['Continue','continue'];
+    return ['Booked','booked'];
+  }
+  function activeStayFor(room,dateIso){ return stays.find(s=>Number(s.room_no)===Number(room)&&s.start_date<=dateIso&&s.end_date>=dateIso&&s.status!=='cancelled' && !(s.status==='completed' && s.checkout_date && dateIso>=s.checkout_date)); }
+
+  function renderCalendar(){
+    $('weekPicker').textContent=`${shortDate(weekStart)} – ${shortDate(addDays(weekStart,6))}`;
+    let h='<table class="calendar"><thead><tr><th>Date</th>'+rooms.map(r=>`<th>Room ${r}</th>`).join('')+'</tr></thead><tbody>';
+    for(let i=0;i<7;i++){
+      const d=addDays(weekStart,i), di=iso(d);
+      h+=`<tr><td class="date-cell">${d.toLocaleDateString('en-US',{weekday:'short'})}<small>${shortDate(d)}</small></td>`;
+      for(const room of rooms){
+        const s=activeStayFor(room,di);
+        if(!s){
+          h+=`<td class="room-cell"><div class="cell-card available" data-room="${room}" data-date="${di}" data-empty="1"><div class="cell-status">Available</div>${canEdit(

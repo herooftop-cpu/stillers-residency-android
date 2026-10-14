@@ -1,0 +1,50 @@
+)?'<div class="plus">+</div>':''}</div></td>`;
+        }else{
+          const [label,cls]=statusFor(s,di);
+          h+=`<td class="room-cell"><div class="cell-card ${cls}" data-stay="${s.id}" data-date="${di}"><div class="cell-status">${label}</div><div class="cell-guest">${esc(s.guest_name)}</div><div class="cell-mobile">${esc(s.mobile||'')}</div><div class="cell-money">Rent: ${money(s.rent)}<br>Adv: ${money(s.advance)}</div></div></td>`;
+        }
+      }
+      h+='</tr>';
+    }
+    h+='</tbody></table>';
+    $('calendarWrap').innerHTML=h;
+    qsa('.cell-card').forEach(el=>{
+      el.onclick=()=>{ if(el.dataset.empty==='1'){ if(canEdit()) openBookingForm(Number(el.dataset.room),el.dataset.date); } else openStayDetails(el.dataset.stay,el.dataset.date); };
+      el.oncontextmenu=e=>{ e.preventDefault(); if(el.dataset.empty==='1'&&canEdit()) openBookingForm(Number(el.dataset.room),el.dataset.date); };
+    });
+  }
+
+  function openBookingForm(room,date,existing=null){
+    if(!canEdit()) return;
+    openModal(existing?'Edit Booking':`Occupy Room ${room} • ${dmy(date)}`,`<div class="form-grid">
+      <label>Guest Name<input id="fGuest" value="${esc(existing?.guest_name||'')}"></label>
+      <label>Mobile Number<input id="fMobile" inputmode="tel" value="${esc(existing?.mobile||'')}"></label>
+      <label>Rent (Rs.)<input id="fRent" type="number" min="0" value="${existing?.rent??''}"></label>
+      <label>Advance (Rs.)<input id="fAdvance" type="number" min="0" value="${existing?.advance??''}"></label>
+    </div><div class="modal-actions"><button id="saveStay" class="primary">${existing?'Save Changes':'Save Booking'}</button></div>`);
+    $('saveStay').onclick=async()=>{
+      const payload={room_no:room,guest_name:$('fGuest').value.trim(),mobile:$('fMobile').value.trim(),rent:Number($('fRent').value||0),advance:Number($('fAdvance').value||0)};
+      if(!payload.guest_name||!payload.mobile) return toast('Guest name and mobile number are required.');
+      let r;
+      if(existing){ r=await sb.from('stays').update(payload).eq('id',existing.id); }
+      else { Object.assign(payload,{start_date:date,end_date:date,status:date>todayISO()?'reserved':'active',created_by_device:deviceId}); r=await sb.from('stays').insert(payload); }
+      if(r.error) return toast(r.error.message.includes('no_room_overlap')?'This room is already occupied/booked for that date.':r.error.message);
+      closeModal(); toast(existing?'Booking updated':'Booking saved'); await loadWeek();
+    };
+  }
+
+  function openStayDetails(id,dateIso){
+    const s=stays.find(x=>x.id===id); if(!s)return; selectedStay=s;
+    const [label]=statusFor(s,dateIso);
+    $('selectedDetails').innerHTML=`<div class="details-grid">
+      <div class="detail-item"><small>Status</small><strong>${label}</strong></div><div class="detail-item"><small>Room</small><strong>${s.room_no}</strong></div><div class="detail-item"><small>Guest Name</small><strong>${esc(s.guest_name)}</strong></div><div class="detail-item"><small>Mobile Number</small><strong>${esc(s.mobile)}</strong></div><div class="detail-item"><small>Rent</small><strong>${money(s.rent)}</strong></div><div class="detail-item"><small>Advance</small><strong>${money(s.advance)}</strong></div><div class="detail-item"><small>Start Date</small><strong>${dmy(s.start_date)}</strong></div><div class="detail-item"><small>Reserved Through</small><strong>${dmy(s.end_date)}</strong></div>
+      </div>${canEdit()?`<div class="detail-actions admin-edit"><button class="neutral" id="editStay">Edit</button><button class="success" id="continueStay">Continue +1 Day</button><button class="neutral" id="markAvailable">Mark Available</button><button class="danger" id="deleteStay">Delete</button></div>`:''}`;
+    show($('selectedDetails'));
+    if(canEdit()){
+      $('editStay').onclick=()=>openBookingForm(Number(s.room_no),s.start_date,s);
+      $('continueStay').onclick=async()=>{ const next=iso(addDays(new Date(s.end_date+'T00:00:00'),1)); const r=await sb.from('stays').update({end_date:next,status:'active'}).eq('id',s.id); if(r.error)return toast(r.error.message.includes('no_room_overlap')?'Next date is already booked for this room.':r.error.message); toast('Stay continued'); await loadWeek(); };
+      $('markAvailable').onclick=()=>confirmAction(`Mark Room ${s.room_no} available now?`,async()=>{ const r=await sb.rpc('mark_stay_available',{p_stay_id:s.id}); if(r.error)return toast(r.error.message); toast('Room marked available'); hide($('selectedDetails')); await loadWeek(); });
+      $('deleteStay').onclick=()=>confirmAction(`Delete booking for ${s.guest_name}?`,async()=>{ const r=await sb.from('stays').delete().eq('id',s.id); if(r.error)return toast(r.error.message); toast('Booking deleted'); hide($('selectedDetails')); await loadWeek(); });
+    }
+  }
+  function confirmAction(text,fn){ openModal('Confirm',`<p>${esc(text)}</p><div class="modal-actions"><button id="cancelConfirm" class="neutral">Cancel</button><button id="yesConfirm" class
