@@ -81,6 +81,6 @@ Rent: ${money(record.rent)}`;
     const nonce=Date.now();
     openModal(existing?'Edit Booking':`Occupy Room ${room} • ${dmy(date)}`,`<form id="bookingForm" class="form-grid" autocomplete="off" onsubmit="return false">
       <label>Guest Name<input id="fGuest" name="booking_guest_${nonce}" autocomplete="new-password" data-lpignore="true" data-form-type="other" autocorrect="off" autocapitalize="words" spellcheck="false" value="${esc(existing?.guest_name||'')}"></label>
-      <label>Mobile Number<input id="fMobile" name="booking_mobile_${nonce}" inputmode="tel" autocomplete="new-password" data-lpignore="true" data-form-type="other" autocorrect="off" spellcheck="false" value="${esc(existing?.mobile||'')}"></label>
+      <label>Mobile Number (Optional)<input id="fMobile" name="booking_mobile_${nonce}" inputmode="tel" autocomplete="new-password" data-lpignore="true" data-form-type="other" autocorrect="off" spellcheck="false" value="${esc(existing?.mobile||'')}"></label>
       <label>Rent (Rs.)<input id="fRent" name="booking_rent_${nonce}" type="number" min="0" autocomplete="off" value="${existing?.rent??''}"></label>
       <label>Advance (Rs.)<input id="fAdvance" name="booking_advance_${nonce}" type="number" min="0" autocomplete="off" value="${existing?.advance??''}"></label>
